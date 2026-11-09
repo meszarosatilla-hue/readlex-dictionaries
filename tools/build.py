@@ -233,6 +233,11 @@ def dedupe(seq):
     return [x for x in seq if not (x in seen or seen.add(x))]
 
 
+def fix_hu(s):
+    """Old 8-bit Hungarian texts: õ/û instead of ő/ű."""
+    return s.replace('õ', 'ő').replace('û', 'ű').replace('Õ', 'Ő').replace('Û', 'Ű')
+
+
 class Tr:
     """Translations of headwords: key → {pos: [(gloss, [words])]}."""
 
@@ -240,6 +245,7 @@ class Tr:
         self.d = {}
 
     def add(self, k, pos, gloss, word, max_groups=8, max_words=8):
+        word = fix_hu(word)
         groups = self.d.setdefault(k, {}).setdefault(pos, [])
         for g in groups:
             if g[0] == gloss:
@@ -379,13 +385,19 @@ def wiktionary(en_path, hu_path):
     return en, tr, rv, rel
 
 
-def forms_table(rel, exists):
-    """Forms only where the app's rules (Lemma.candidates) would not find the right base form."""
+def forms_table(rel, exists, common=()):
+    """Forms only where the app's rules (Lemma.candidates) would not find the right base form.
+    Of several base forms, rare ones ("ran" → "rin") are left out when a common one ("run") is there;
+    common = words with a translation or in WordNet."""
     out = {}
     for fk, lemmas in rel.items():
         lemmas = [l for l in lemmas if l in exists and l != fk]
         if not lemmas:
             continue
+        if len(lemmas) > 1 and common:
+            known = [l for l in lemmas if l in common]
+            if known:
+                lemmas = known
         if fk not in exists:
             first = next((c for c in candidates(fk) if c in exists), None)
             if first is not None and lemmas == [first]:
@@ -598,7 +610,8 @@ def build_wiktionary(packs, en_path, hu_path, extra_keys=()):
     packs.add('en-hu-wiktionary-hu', rv, name='Wiktionary (magyar szócikkek)', type='tr',
               **{'from': 'en', 'to': 'hu'}, rank=20, **WIKT)
     exists = set(en) | set(tr) | set(rv) | set(extra_keys)
-    packs.add('en-forms', forms_table(rel, exists), name='English word forms', type='forms',
+    common = set(tr) | set(rv) | set(extra_keys)
+    packs.add('en-forms', forms_table(rel, exists, common), name='English word forms', type='forms',
               **{'from': 'en', 'to': 'en'}, rank=0, **WIKT)
 
 
