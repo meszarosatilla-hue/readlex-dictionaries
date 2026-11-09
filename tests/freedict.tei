@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body>
+<entry><form><orth>dog</orth></form><gramGrp><pos>n</pos></gramGrp><sense><cit type="trans"><quote>kutya</quote></cit><cit type="trans"><quote>eb</quote></cit></sense></entry>
+<entry><form><orth>run</orth></form><gramGrp><pos>v</pos></gramGrp><sense><cit type="trans"><quote>fut</quote></cit><cit type="trans"><quote>rohan</quote></cit></sense><sense><def>manage</def><cit type="trans"><quote>vezet</quote></cit></sense></entry>
+</body></text></TEI>

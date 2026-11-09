@@ -1,0 +1,44 @@
+name: Szótárak készítése
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: packs
+  cancel-in-progress: false
+
+jobs:
+  packs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Teszt a mintafájlokkal
+        run: python3 tools/build.py --test build/test
+
+      - name: Források letöltése és a szótárcsomagok elkészítése
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/build.py work out
+
+      - name: Közzététel (Releases → packs)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la out
+          if gh release view packs >/dev/null 2>&1; then
+            gh release upload packs out/* --clobber
+          else
+            gh release create packs out/* --title "ReadLex dictionary packs" \
+              --notes "Downloadable dictionaries of the ReadLex Android app. See README for sources and licenses."
+          fi

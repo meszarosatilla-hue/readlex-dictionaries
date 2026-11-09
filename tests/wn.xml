@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LexicalResource xmlns:dc="https://globalwordnet.github.io/schemas/dc/">
+ <Lexicon id="oewn" label="Open English WordNet" language="en" email="x" license="https://creativecommons.org/licenses/by/4.0/" version="2024">
+  <LexicalEntry id="oewn-dog-n">
+   <Lemma writtenForm="dog" partOfSpeech="n"><Pronunciation variety="GB">dɒɡ</Pronunciation><Pronunciation variety="US">dɔɡ</Pronunciation></Lemma>
+   <Sense id="oewn-dog__1" synset="oewn-02086723-n"/>
+   <Sense id="oewn-dog__2" synset="oewn-10133978-n"/>
+  </LexicalEntry>
+  <LexicalEntry id="oewn-run-v">
+   <Lemma writtenForm="run" partOfSpeech="v"/>
+   <Sense id="oewn-run__1" synset="oewn-01928838-v"/>
+  </LexicalEntry>
+  <Synset id="oewn-02086723-n" ili="i1" partOfSpeech="n" members="oewn-dog-n"><Definition>a member of the genus Canis</Definition><Example>the dog barked</Example></Synset>
+  <Synset id="oewn-10133978-n" ili="i2" partOfSpeech="n" members="oewn-dog-n"><Definition>a dull unattractive unpleasant girl or woman</Definition></Synset>
+  <Synset id="oewn-01928838-v" ili="i3" partOfSpeech="v" members="oewn-run-v"><Definition>move fast by using one's feet</Definition></Synset>
+ </Lexicon>
+</LexicalResource>
