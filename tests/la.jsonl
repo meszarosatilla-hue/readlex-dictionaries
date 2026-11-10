@@ -2,3 +2,6 @@
 {"word": "bellum", "lang": "Latin", "lang_code": "la", "pos": "noun", "forms": [{"form": "bellī", "tags": ["genitive"]}, {"form": "bella", "tags": ["plural"]}], "senses": [{"glosses": ["war, warfare"]}]}
 {"word": "amavit", "lang": "Latin", "lang_code": "la", "pos": "verb", "senses": [{"glosses": ["third-person singular perfect active indicative of amō"], "form_of": [{"word": "amō"}], "tags": ["form-of"]}]}
 {"word": "curro", "lang": "Latin", "lang_code": "la", "pos": "verb", "senses": [{"glosses": ["to run"]}]}
+{"word": "divido", "lang": "Latin", "lang_code": "la", "pos": "verb", "senses": [{"glosses": ["to divide, separate"]}]}
+{"word": "divisus", "lang": "Latin", "lang_code": "la", "pos": "verb", "forms": [{"form": "dīvīsa", "tags": ["feminine"]}], "senses": [{"glosses": ["divided, having been divided"], "form_of": [{"word": "dīvidō"}], "tags": ["form-of", "participle"]}]}
+{"word": "Gallia", "lang": "Latin", "lang_code": "la", "pos": "name", "senses": [{"glosses": ["Gaul (a region of Western Europe)"]}]}

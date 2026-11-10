@@ -396,7 +396,7 @@ def lang_pass(code, path):
             continue
         word = clean(e.get('word') or '')
         pos = clean(e.get('pos') or '')
-        if pos in SKIP_POS or not head_ok(word):
+        if (pos in SKIP_POS and pos != 'name') or not head_ok(word):
             continue
         n += 1
         k = key(word, code)
@@ -441,6 +441,23 @@ def lang_pass(code, path):
     note('Wiktionary %s: %d entries, %d explained in English, %d English words with equivalents'
          % (name, n, len(d), len(rv)))
     return d, rel, rv
+
+
+def chain(rel, exists):
+    """Base forms that are themselves only forms of another word (divisa → divisus → divido)."""
+    out = {}
+    for fk, lemmas in rel.items():
+        res = []
+        for l in lemmas:
+            if l in exists:
+                res.append(l)
+                continue
+            for l2 in rel.get(l, []):
+                if l2 in exists and l2 != fk:
+                    res.append(l2)
+                    break
+        out[fk] = dedupe(res + [l for l in lemmas if l not in res])
+    return out
 
 
 def forms_table(rel, exists, common=(), rules=True):
@@ -693,7 +710,7 @@ def build_all(packs, en_path, lang_paths, wn_keys=()):
         packs.add('en-%s-wiktionary-%s' % (c, c), rv, name='Wiktionary (%s)' % LANGS[c][0], type='tr',
                   **{'from': 'en', 'to': c}, rank=20, **WIKT)
         common |= set(rv)
-        packs.add('%s-forms' % c, forms_table(lrel, set(d), rules=False), name='%s word forms' % LANGS[c][0],
+        packs.add('%s-forms' % c, forms_table(chain(lrel, set(d)), set(d), rules=False), name='%s word forms' % LANGS[c][0],
                   type='forms', **{'from': c, 'to': c}, rank=0, **WIKT)
     exists = set(en) | common
     packs.add('en-forms', forms_table(rel, exists, common), name='English word forms', type='forms',
