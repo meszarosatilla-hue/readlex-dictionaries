@@ -22,6 +22,7 @@ import sys
 import tarfile
 import time
 import traceback
+import unicodedata
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -37,6 +38,15 @@ OLD_TAGS = {'obsolete', 'archaic', 'dated', 'historical'}
 MAX_SENSES = 5
 MAX_SENSE_LEN = 220
 MAX_WORDS_IN_HEAD = 4
+
+# Languages of the packs: ISO code → name on kaikki.org, FreeDict code
+LANGS = {
+    'hu': ('Hungarian', 'hun'), 'de': ('German', 'deu'), 'fr': ('French', 'fra'), 'es': ('Spanish', 'spa'),
+    'it': ('Italian', 'ita'), 'pt': ('Portuguese', 'por'), 'nl': ('Dutch', 'nld'), 'pl': ('Polish', 'pol'),
+    'cs': ('Czech', 'ces'), 'sk': ('Slovak', 'slk'), 'ro': ('Romanian', 'ron'), 'la': ('Latin', 'lat'),
+}
+FD = {v[1]: k for k, v in LANGS.items()}
+FD['eng'] = 'en'
 
 UA = 'ReadLex dictionary builder (+https://github.com/meszarosatilla-hue/readlex-dictionaries)'
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -57,10 +67,14 @@ def warn(msg):
 
 # ---------------------------------------------------------------------- shared with the app (core/Lemma.java)
 
-def key(word):
+def key(word, lang='en'):
+    """Same as Lemma.key (Java). Latin: without macrons and breves (books rarely print them)."""
     s = word.strip().lower()
-    for a, b in (('’', "'"), ('‘', "'"), ('ʼ', "'"), ('‐', '-'), ('‑', '-')):
+    for a, b in (('\u2019', "'"), ('\u2018', "'"), ('\u02bc', "'"), ('\u2010', '-'), ('\u2011', '-')):
         s = s.replace(a, b)
+    if lang == 'la':
+        s = ''.join(c for c in unicodedata.normalize('NFD', s) if c not in '\u0304\u0306')
+        s = unicodedata.normalize('NFC', s)
     return s
 
 
@@ -241,11 +255,13 @@ def fix_hu(s):
 class Tr:
     """Translations of headwords: key → {pos: [(gloss, [words])]}."""
 
-    def __init__(self):
+    def __init__(self, lang=''):
         self.d = {}
+        self.lang = lang
 
     def add(self, k, pos, gloss, word, max_groups=8, max_words=8):
-        word = fix_hu(word)
+        if self.lang == 'hu':
+            word = fix_hu(word)
         groups = self.d.setdefault(k, {}).setdefault(pos, [])
         for g in groups:
             if g[0] == gloss:
@@ -292,11 +308,10 @@ def is_lang(t, code, name):
     return t.get('lang_code') == code or t.get('code') == code or t.get('lang') == name
 
 
-def wiktionary(en_path, hu_path):
-    """English definitions, English → Hungarian (translation tables), English → Hungarian (from
-    Hungarian entries) and the English form table."""
+def english_pass(en_path, targets):
+    """English entries: definitions, the form table, and translations into every target language."""
     defs = {}
-    trs = Tr()
+    trs = {t: Tr(t) for t in targets}
     rel = {}
     n_en = 0
     for e in jsonl(en_path):
@@ -342,50 +357,93 @@ def wiktionary(en_path, hu_path):
                 t.setdefault('sense', (sn.get('glosses') or [''])[-1])
                 tl.append(t)
         for t in tl:
-            if not is_lang(t, 'hu', 'Hungarian'):
+            code = t.get('lang_code') or t.get('code')
+            if code not in trs:
                 continue
             w = clean(t.get('word') or '')
             if w and len(w) <= 60:
-                trs.add(k, pos, short(clean(t.get('sense') or ''), 90), w)
+                trs[code].add(k, pos, short(clean(t.get('sense') or ''), 90), w)
     en = {k: RS.join(v) for k, v in defs.items()}
-    tr = trs.payloads()
-    note('Wiktionary: %d English entries, %d words with definitions, %d with Hungarian translations'
-         % (n_en, len(en), len(tr)))
+    out = {c: t.payloads() for c, t in trs.items()}
+    note('Wiktionary English: %d entries, %d with definitions; translations: %s'
+         % (n_en, len(en), ', '.join('%s %d' % (c, len(v)) for c, v in out.items())))
+    return en, out, rel
 
-    rev = Tr()
-    n_hu = 0
-    if hu_path:
-        found = {}
-        for e in jsonl(hu_path):
-            if not is_lang(e, 'hu', 'Hungarian'):
+
+def gloss_words(g, pos):
+    """Short English equivalents in a gloss ("to love, to be fond of (someone)" → love, be fond of)."""
+    g = re.sub(r'\([^)]*\)', '', g)
+    out = []
+    for part in re.split(r'[;,]', g):
+        p = part.strip().strip('.').strip()
+        if pos == 'verb' and p.startswith('to '):
+            p = p[3:]
+        if p and len(p.split()) <= 3 and re.fullmatch(r"[A-Za-z][A-Za-z' -]*", p):
+            out.append(p)
+    return out
+
+
+def lang_pass(code, path):
+    """Entries of one language: its words explained in English, its word forms, and English words
+    with equivalents in this language (the reverse direction)."""
+    name = LANGS[code][0]
+    defs = {}
+    rel = {}
+    found = {}
+    n = 0
+    for e in jsonl(path):
+        if not is_lang(e, code, name):
+            continue
+        word = clean(e.get('word') or '')
+        pos = clean(e.get('pos') or '')
+        if pos in SKIP_POS or not head_ok(word):
+            continue
+        n += 1
+        k = key(word, code)
+        senses, old = [], []
+        for rank, sn in enumerate(e.get('senses') or []):
+            tags = set(sn.get('tags') or [])
+            for b in (sn.get('form_of') or []) + (sn.get('alt_of') or []):
+                bw = b.get('word')
+                if bw and head_ok(bw) and key(bw, code) != k:
+                    lst = rel.setdefault(k, [])
+                    if key(bw, code) not in lst:
+                        lst.append(key(bw, code))
+            if sn.get('form_of') or 'form-of' in tags:
                 continue
-            hw = clean(e.get('word') or '')
-            pos = clean(e.get('pos') or '')
-            if not hw or pos in SKIP_POS or len(hw.split()) > 3:
+            t = sense_text(sn)
+            if not t:
                 continue
-            n_hu += 1
-            for rank, sn in enumerate(e.get('senses') or []):
-                tags = set(sn.get('tags') or [])
-                if sn.get('form_of') or sn.get('alt_of') or 'form-of' in tags or tags & OLD_TAGS:
-                    continue
-                g = re.sub(r'\([^)]*\)', '', (sn.get('glosses') or [''])[-1])
-                for part in re.split(r'[;,]', g):
-                    p = part.strip().strip('.').strip()
-                    if pos == 'verb' and p.startswith('to '):
-                        p = p[3:]
-                    if not p or len(p.split()) > 3 or not re.fullmatch(r"[A-Za-z][A-Za-z' -]*", p):
-                        continue
-                    found.setdefault(key(p), []).append((rank, hw, pos))
-        for k, lst in found.items():
-            lst.sort(key=lambda x: x[0])
-            for _, w, pos in lst:
-                rev.add(k, pos, REVERSE, w, max_words=10)
+            (old if tags & OLD_TAGS else senses).append(short(t, MAX_SENSE_LEN))
+            if not (tags & OLD_TAGS) and not sn.get('alt_of') and len(word.split()) <= 3:
+                for p in gloss_words((sn.get('glosses') or [''])[-1], pos):
+                    found.setdefault(key(p), []).append((rank, word, pos))
+        senses = dedupe(senses or old[:1])[:MAX_SENSES]
+        if senses:
+            defs.setdefault(k, []).append(US.join([word, pos, ipa_of(e), GS.join(senses)]))
+        for f in e.get('forms') or []:
+            fw = f.get('form') or ''
+            tags = set(f.get('tags') or [])
+            if not fw or ' ' in fw or tags & {'table-tags', 'inflection-template', 'class', 'romanization'}:
+                continue
+            fk = key(fw, code)
+            if fk != k and head_ok(fw):
+                lst = rel.setdefault(fk, [])
+                if k not in lst and len(lst) < 6:
+                    lst.append(k)
+    rev = Tr(code)
+    for k, lst in found.items():
+        lst.sort(key=lambda x: x[0])
+        for _, w, pos in lst:
+            rev.add(k, pos, REVERSE, w, max_words=10)
+    d = {k: RS.join(v) for k, v in defs.items()}
     rv = rev.payloads()
-    note('Wiktionary: %d Hungarian entries give Hungarian equivalents for %d English words' % (n_hu, len(rv)))
-    return en, tr, rv, rel
+    note('Wiktionary %s: %d entries, %d explained in English, %d English words with equivalents'
+         % (name, n, len(d), len(rv)))
+    return d, rel, rv
 
 
-def forms_table(rel, exists, common=()):
+def forms_table(rel, exists, common=(), rules=True):
     """Forms only where the app's rules (Lemma.candidates) would not find the right base form.
     Of several base forms, rare ones ("ran" → "rin") are left out when a common one ("run") is there;
     common = words with a translation or in WordNet."""
@@ -398,7 +456,7 @@ def forms_table(rel, exists, common=()):
             known = [l for l in lemmas if l in common]
             if known:
                 lemmas = known
-        if fk not in exists:
+        if rules and fk not in exists:
             first = next((c for c in candidates(fk) if c in exists), None)
             if first is not None and lemmas == [first]:
                 continue
@@ -484,8 +542,9 @@ def gh_headers():
 
 # ---------------------------------------------------------------------- FreeDict (TEI)
 
-def freedict(name, work):
-    db = json.loads(text_of('https://freedict.org/freedict-database.json'))
+def freedict(name, work, db=None):
+    if db is None:
+        db = json.loads(text_of('https://freedict.org/freedict-database.json'))
     item = next((d for d in db if d.get('name') == name), None)
     if item is None:
         raise IOError('FreeDict has no %s dictionary' % name)
@@ -603,27 +662,80 @@ WIKT = dict(source='Wiktionary (via kaikki.org / wiktextract)', license='CC BY-S
             url='https://en.wiktionary.org')
 
 
-def build_wiktionary(packs, en_path, hu_path, extra_keys=()):
-    en, tr, rv, rel = wiktionary(en_path, hu_path)
+def build_all(packs, en_path, lang_paths, wn_keys=()):
+    """lang_paths: code → path of the kaikki extract, or a function returning it (downloads lazily,
+    so only one big file is on the disk at a time)."""
+    targets = list(LANGS)
+    en, trs, rel = english_pass(en_path, targets)
     packs.add('en-wiktionary', en, name='Wiktionary', type='def', **{'from': 'en', 'to': 'en'}, rank=10, **WIKT)
-    packs.add('en-hu-wiktionary', tr, name='Wiktionary', type='tr', **{'from': 'en', 'to': 'hu'}, rank=10, **WIKT)
-    packs.add('en-hu-wiktionary-hu', rv, name='Wiktionary (magyar szócikkek)', type='tr',
-              **{'from': 'en', 'to': 'hu'}, rank=20, **WIKT)
-    exists = set(en) | set(tr) | set(rv) | set(extra_keys)
-    common = set(tr) | set(rv) | set(extra_keys)
+    common = set(wn_keys)
+    for c in targets:
+        packs.add('en-%s-wiktionary' % c, trs.get(c), name='Wiktionary', type='tr', **{'from': 'en', 'to': c},
+                  rank=10, **WIKT)
+        common |= set(trs.get(c) or ())
+    for c in targets:
+        src = lang_paths.get(c)
+        if src is None:
+            continue
+        try:
+            path = src() if callable(src) else src
+            d, lrel, rv = lang_pass(c, path)
+        except Exception as e:
+            traceback.print_exc()
+            warn('%s skipped: %s' % (LANGS[c][0], e))
+            continue
+        if callable(src):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        packs.add('%s-wiktionary' % c, d, name='Wiktionary', type='def', **{'from': c, 'to': 'en'}, rank=10, **WIKT)
+        packs.add('en-%s-wiktionary-%s' % (c, c), rv, name='Wiktionary (%s)' % LANGS[c][0], type='tr',
+                  **{'from': 'en', 'to': c}, rank=20, **WIKT)
+        common |= set(rv)
+        packs.add('%s-forms' % c, forms_table(lrel, set(d), rules=False), name='%s word forms' % LANGS[c][0],
+                  type='forms', **{'from': c, 'to': c}, rank=0, **WIKT)
+    exists = set(en) | common
     packs.add('en-forms', forms_table(rel, exists, common), name='English word forms', type='forms',
               **{'from': 'en', 'to': 'en'}, rank=0, **WIKT)
 
 
+def freedict_all(packs, work):
+    """Every FreeDict dictionary between two languages of ReadLex."""
+    db = json.loads(text_of('https://freedict.org/freedict-database.json'))
+    n = 0
+    for item in db:
+        name = item.get('name') or ''
+        if '-' not in name:
+            continue
+        a, b = name.split('-', 1)
+        if a not in FD or b not in FD:
+            continue
+        try:
+            fd, version = freedict(name, work, db)
+        except Exception as e:
+            warn('FreeDict %s skipped: %s' % (name, e))
+            continue
+        frm, to = FD[a], FD[b]
+        if frm != 'en':
+            fd = {key(k, frm) if frm == 'la' else k: v for k, v in fd.items()}
+        packs.add('%s-%s-freedict' % (frm, to), fd, name='FreeDict', type='tr', **{'from': frm, 'to': to}, rank=30,
+                  version=version, source='FreeDict %s' % name, license='GPL / free licenses (see freedict.org)',
+                  url='https://freedict.org')
+        n += 1
+    note('FreeDict: %d dictionaries between ReadLex languages' % n)
+
+
 def main(argv):
     if argv[:1] == ['--test']:
+        t = os.path.join(HERE, '..', 'tests')
         packs = Packs(argv[1])
-        build_wiktionary(packs, os.path.join(HERE, '..', 'tests', 'en.jsonl'),
-                         os.path.join(HERE, '..', 'tests', 'hu.jsonl'))
-        wn = wordnet_from(os.path.join(HERE, '..', 'tests', 'wn.xml'))
+        wn = wordnet_from(os.path.join(t, 'wn.xml'))
+        build_all(packs, os.path.join(t, 'en.jsonl'),
+                  {'hu': os.path.join(t, 'hu.jsonl'), 'la': os.path.join(t, 'la.jsonl')}, wn.keys())
         packs.add('en-wordnet', wn, name='Open English WordNet', type='def', **{'from': 'en', 'to': 'en'},
                   rank=20, source='Open English WordNet', license='CC BY 4.0')
-        with open(os.path.join(HERE, '..', 'tests', 'freedict.tei'), 'rb') as f:
+        with open(os.path.join(t, 'freedict.tei'), 'rb') as f:
             packs.add('en-hu-freedict', freedict_from(f.read()), name='FreeDict', type='tr',
                       **{'from': 'en', 'to': 'hu'}, rank=30, source='FreeDict', license='GPL')
         packs.finish()
@@ -643,12 +755,12 @@ def main(argv):
 
     try:
         en = kaikki('English', work)
-        hu = None
+        lazy = {c: (lambda n=LANGS[c][0]: kaikki(n, work)) for c in LANGS}
+        build_all(packs, en, lazy, wn.keys())
         try:
-            hu = kaikki('Hungarian', work)
-        except Exception as e:
-            warn('Hungarian Wiktionary entries skipped: %s' % e)
-        build_wiktionary(packs, en, hu, extra_keys=wn.keys())
+            os.remove(en)
+        except OSError:
+            pass
     except Exception as e:
         traceback.print_exc()
         warn('Wiktionary skipped: %s' % e)
@@ -660,10 +772,7 @@ def main(argv):
                   license='CC BY 4.0', url='https://en-word.net')
 
     try:
-        fd, fd_version = freedict('eng-hun', work)
-        packs.add('en-hu-freedict', fd, name='FreeDict', type='tr', **{'from': 'en', 'to': 'hu'}, rank=30,
-                  version=fd_version, source='FreeDict English-Hungarian', license='GPL-2.0-or-later',
-                  url='https://freedict.org')
+        freedict_all(packs, work)
     except Exception as e:
         traceback.print_exc()
         warn('FreeDict skipped: %s' % e)

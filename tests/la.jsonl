@@ -1,0 +1,4 @@
+{"word": "amo", "lang": "Latin", "lang_code": "la", "pos": "verb", "sounds": [{"ipa": "/ˈa.moː/"}], "forms": [{"form": "amō", "tags": ["canonical"]}, {"form": "amāre", "tags": ["infinitive"]}, {"form": "amāvit", "tags": ["perfect"]}, {"form": "amat", "tags": ["present"]}, {"form": "la-conj", "tags": ["inflection-template"]}], "senses": [{"glosses": ["to love, to be fond of"]}, {"glosses": ["to like"]}]}
+{"word": "bellum", "lang": "Latin", "lang_code": "la", "pos": "noun", "forms": [{"form": "bellī", "tags": ["genitive"]}, {"form": "bella", "tags": ["plural"]}], "senses": [{"glosses": ["war, warfare"]}]}
+{"word": "amavit", "lang": "Latin", "lang_code": "la", "pos": "verb", "senses": [{"glosses": ["third-person singular perfect active indicative of amō"], "form_of": [{"word": "amō"}], "tags": ["form-of"]}]}
+{"word": "curro", "lang": "Latin", "lang_code": "la", "pos": "verb", "senses": [{"glosses": ["to run"]}]}

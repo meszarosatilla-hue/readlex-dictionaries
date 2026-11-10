@@ -4,14 +4,21 @@ Offline dictionary packs for the **ReadLex** Android e-book reader. The app down
 [packs release](https://github.com/meszarosatilla-hue/readlex-dictionaries/releases/tag/packs)
 (`index.json` lists them). They are built by `tools/build.py` in GitHub Actions.
 
+Languages: English, Hungarian, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Czech, Slovak,
+Romanian and Latin (`X` below).
+
 | Pack | Content | Source | License |
 |---|---|---|---|
-| `en-wiktionary` | English definitions | [Wiktionary](https://en.wiktionary.org) via [kaikki.org](https://kaikki.org) (wiktextract) | CC BY-SA 4.0 / GFDL |
-| `en-hu-wiktionary` | English → Hungarian (translation tables) | Wiktionary | CC BY-SA 4.0 / GFDL |
-| `en-hu-wiktionary-hu` | English → Hungarian (from Hungarian entries) | Wiktionary | CC BY-SA 4.0 / GFDL |
-| `en-forms` | English word forms (went → go) | Wiktionary | CC BY-SA 4.0 / GFDL |
+| `en-wiktionary` | English definitions | [Wiktionary](https://en.wiktionary.org) via [kaikki.org](https://kaikki.org) | CC BY-SA 4.0 / GFDL |
 | `en-wordnet` | English definitions | [Open English WordNet](https://en-word.net) | CC BY 4.0 |
-| `en-hu-freedict` | English → Hungarian | [FreeDict](https://freedict.org) | GPL |
+| `en-X-wiktionary` | English → X (translation tables) | Wiktionary | CC BY-SA 4.0 / GFDL |
+| `en-X-wiktionary-X` | English → X (collected from the X entries) | Wiktionary | CC BY-SA 4.0 / GFDL |
+| `X-wiktionary` | X words explained in English | Wiktionary | CC BY-SA 4.0 / GFDL |
+| `X-forms`, `en-forms` | word forms → base form (amavit → amo) | Wiktionary | CC BY-SA 4.0 / GFDL |
+| `X-Y-freedict` | every FreeDict dictionary between two of these languages | [FreeDict](https://freedict.org) | GPL and other free licenses |
+
+Between two languages without a direct dictionary the app translates through English (X → English → Y)
+and shows those results separately, at the end.
 
 The packs are derived works of these sources and are distributed under the same licenses.
 
