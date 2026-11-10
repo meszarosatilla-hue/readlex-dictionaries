@@ -53,7 +53,16 @@ def sha256(p):
 
 
 def engine():
-    rel = json.loads(gh('api', 'repos/%s/releases/latest' % REPO))
+    # Version 2 removed espeak-ng (Piper voices then need pre-phonemized input): the last 1.x is used.
+    rel = None
+    page = 1
+    while rel is None and page < 20:
+        for r in json.loads(gh('api', 'repos/%s/releases?per_page=100&page=%d' % (REPO, page))):
+            if re.fullmatch(r'v1\.\d+\.\d+', r['tag_name']) and not r.get('prerelease'):
+                if any(re.search(r'android\.tar\.bz2$', a['name']) or a['name'].endswith('.aar') for a in r['assets']):
+                    rel = r
+                    break
+        page += 1
     tag = rel['tag_name']
     names = [a['name'] for a in rel['assets']]
     note('sherpa-onnx %s; android assets: %s' % (tag, ', '.join(n for n in names if 'android' in n.lower() or n.endswith('.aar'))[:900]))
@@ -105,7 +114,7 @@ def voices():
     found = {}
     for a in allassets:
         m = re.fullmatch(r'vits-piper-([a-z]{2}_[A-Z]{2})-([A-Za-z0-9_]+)-(high|medium)\.tar\.bz2', a['name'])
-        if not m or m.group(1) not in LOCALES or any(x in m.group(2) for x in MULTI):
+        if not m or m.group(1) not in LOCALES or any(x in m.group(2) for x in MULTI) or 'glados' in m.group(2):
             continue
         found.setdefault(m.group(1), []).append((0 if m.group(3) == 'high' else 1, m.group(2), m.group(3), a))
     index = []
