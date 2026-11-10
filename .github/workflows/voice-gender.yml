@@ -1,0 +1,28 @@
+name: Hangok neme
+
+on:
+  push:
+    branches: [main]
+    paths: ['tools/voice_gender.py', '.github/workflows/voice-gender.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  gender:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Mérés (minden hang felolvas egy mondatot)
+        run: |
+          pip install numpy "sherpa-onnx==$(cat vendor/sherpa-version.txt | tr -d v)"
+          python3 tools/voice_gender.py
+      - name: voices.json frissítése
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload voices voices-out/voices.json --clobber
