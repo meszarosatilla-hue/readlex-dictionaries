@@ -3,6 +3,7 @@ name: Szótárak készítése
 on:
   push:
     branches: [main]
+    paths: ['tools/build.py', 'tests/**', '.github/workflows/build.yml']
   workflow_dispatch:
 
 permissions:
