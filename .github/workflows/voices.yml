@@ -1,0 +1,41 @@
+name: Felolvasó hangok
+
+on:
+  push:
+    branches: [main]
+    paths: ['tools/voices.py', '.github/workflows/voices.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  voices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Motor és hangok előkészítése
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/voices.py
+      - name: Közzététel (Releases → voices)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la voices-out
+          if gh release view voices >/dev/null 2>&1; then
+            gh release upload voices voices-out/* --clobber
+          else
+            gh release create voices voices-out/* --title "ReadLex read-aloud voices" \
+              --notes "Piper voices (https://github.com/rhasspy/piper, via k2-fsa/sherpa-onnx) and the sherpa-onnx engine for the ReadLex app."
+          fi
+      - name: A motor Kotlin API-ja a tárolóba (vendor/)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add vendor
+          git diff --cached --quiet || { git commit -m "vendor: sherpa-onnx Tts.kt"; git push; }
